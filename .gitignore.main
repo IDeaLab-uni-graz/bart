@@ -69,3 +69,12 @@ compile_commands.json
 
 #wasm:
 *.wasm
+
+#data
+data/*
+*.csv
+
+#executable
+bart
+
+#generated
