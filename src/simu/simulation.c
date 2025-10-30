@@ -10,6 +10,8 @@
 #include <complex.h>
 #include <math.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "misc/debug.h"
 #include "misc/misc.h"
@@ -189,6 +191,94 @@ void pulse_init(struct simdata_pulse *pulse, float rf_start, float rf_end,
   pulse_sinc_init(&pulse->sinc, rf_end - rf_start, angle, phase, bwtp, alpha);
 }
 
+/* ------------ Saving Utils -------------- */
+
+void refreshSave() {
+  const char *save_filename = getenv("SAVE_FILENAME");
+
+  FILE *file = fopen(save_filename, "w");
+  if (file == NULL) {
+    perror("Error opening file");
+    return;
+  }
+
+  fclose(file);
+}
+
+void saveTime(float t) {
+  const char *save_filename = getenv("SAVE_FILENAME");
+
+  FILE *file = fopen(save_filename, "a");
+  if (file == NULL) {
+    perror("Error opening file");
+    return;
+  }
+
+  fprintf(file, "%.17g,", t);
+
+  fclose(file);
+}
+
+void save3D(float *cell, bool break_line) {
+  const char *save_filename = getenv("SAVE_FILENAME");
+
+  FILE *file = fopen(save_filename, "a");
+  if (file == NULL) {
+    perror("Error opening file");
+    return;
+  }
+
+  int cellSize = 3;
+  for (int i = 0; i < cellSize; i++) {
+    fprintf(file, "%.17g", cell[i]);
+    if (i < cellSize - 1) {
+      fprintf(file, ",");
+    }
+  }
+
+  if (break_line) {
+    fprintf(file, "\n");
+  } else {
+    fprintf(file, ",");
+  }
+  fclose(file);
+}
+
+void save3DPools(float *cellPools, int pools) {
+  const char *save_filename = getenv("SAVE_FILENAME");
+
+  FILE *file = fopen(save_filename, "a");
+  if (file == NULL) {
+    perror("Error opening file");
+    return;
+  }
+
+  int poolSize = 3 * pools;
+  for (int i = 0; i < poolSize; i++) {
+    fprintf(file, "%.17g", cellPools[i]);
+    if (i < poolSize - 1) {
+      fprintf(file, ",");
+    }
+  }
+
+  fprintf(file, "\n");
+  fclose(file);
+}
+
+void timeResetFlag() {
+  const char *save_filename = getenv("SAVE_FILENAME");
+
+  FILE *file = fopen(save_filename, "a");
+  if (file == NULL) {
+    perror("Error opening file");
+    return;
+  }
+
+  fprintf(file, "-1\n");
+
+  fclose(file);
+}
+
 /* ------------ Bloch Equations -------------- */
 
 static void compute_fields(struct sim_data *data, float gb_eff[3], float t) {
@@ -202,31 +292,54 @@ static void compute_fields(struct sim_data *data, float gb_eff[3], float t) {
   if (data->seq.pulse_applied) {
 
     struct pulse *ps = NULL;
+    complex ps_at_t;
 
     switch (data->pulse.type) {
 
     case PULSE_SINC:
       ps = CAST_UP(&data->pulse.sinc);
+      ps_at_t = pulse_eval(ps, t);
+      //   debug_printf(DP_INFO, "\t|sinc(%f)| = %f, phase = %f\n", t,
+      //                cabsf(ps_at_t), data->pulse.phase);
+
+      //   debug_printf(DP_INFO, "\t sinc(%f) = %.17g + i%.17g\n", t,
+      //   crealf(ps_at_t),
+      //                cimagf(ps_at_t));
       break;
 
     case PULSE_SINC_SMS:
       ps = CAST_UP(&data->pulse.sms);
+      ps_at_t = pulse_eval(ps, t);
+      debug_printf(DP_INFO, "\tsinc_sms(%f) = %f + i%f, phase = %f\n", t,
+                   crealf(ps_at_t), cimagf(ps_at_t), data->pulse.phase);
       break;
 
     case PULSE_HS:
       ps = CAST_UP(&data->pulse.hs);
+      ps_at_t = pulse_eval(ps, t);
+      debug_printf(DP_INFO, "\tsech(%f) = %f + i%f, phase = %f\n", t,
+                   crealf(ps_at_t), cimagf(ps_at_t), data->pulse.phase);
       break;
 
     case PULSE_REC:
       ps = CAST_UP(&data->pulse.rect);
+      ps_at_t = pulse_eval(ps, t);
+      debug_printf(DP_INFO, "\trec(%f) = %f + i%f, phase = %f\n", t,
+                   crealf(ps_at_t), cimagf(ps_at_t), data->pulse.phase);
       break;
 
     case PULSE_ARB:
       ps = CAST_UP(&data->pulse.arb);
+      ps_at_t = pulse_eval(ps, t);
+      debug_printf(DP_INFO, "\tarb(%f) = %f + i%f, phase = %f\n", t,
+                   crealf(ps_at_t), cimagf(ps_at_t), data->pulse.phase);
       break;
 
     case PULSE_GAUSS:
       ps = CAST_UP(&data->pulse.gauss);
+      ps_at_t = pulse_eval(ps, t);
+      debug_printf(DP_INFO, "\tgauss(%f) = %f + i%f, phase = %f\n", t,
+                   crealf(ps_at_t), cimagf(ps_at_t), data->pulse.phase);
       break;
     }
 
@@ -522,6 +635,8 @@ void rf_pulse(struct sim_data *data, float h, float tol, int N, int P,
     float gb_eff[3];
     void *gb_eff_p = gb_eff; // clang workaround
 
+    debug_printf(DP_INFO, "rf_pulse\n");
+
     NESTED(void, call_fun, (float *out, float t, const float *in)) {
       float *gb_eff = gb_eff_p;
       compute_fields(data, gb_eff, t);
@@ -530,6 +645,15 @@ void rf_pulse(struct sim_data *data, float h, float tol, int N, int P,
 
       gb_eff[0] *= data->voxel.b1;
       gb_eff[1] *= data->voxel.b1;
+
+      // debug_printf(DP_INFO, "\t gb_x(%f) = %.17g\n", t, gb_eff[0]);
+
+      saveTime(t);
+      save3D(gb_eff, false);
+
+      //   debug_printf(DP_INFO, "\t gb(%f) = [x: %f, y: %f, z: %f] (rf)\n",
+      //   t, gb_eff[0],
+      //                gb_eff[1], gb_eff[2]);
 
       float r2[data->voxel.P];
 
@@ -542,9 +666,20 @@ void rf_pulse(struct sim_data *data, float h, float tol, int N, int P,
                             data->voxel.k, data->voxel.m0, data->voxel.Om,
                             gb_eff);
 
-      } else {
+        save3DPools(in, data->voxel.P);
 
+      } else {
+        // debug_printf(DP_INFO, "\t   Bloch step with R1 = %f and R2 = %f
+        // (rf)\n",
+        //              data->voxel.r1[0], data->voxel.r2[0]);
         bloch_ode(out, in, data->voxel.r1[0], data->voxel.r2[0], gb_eff);
+        // debug_printf(DP_INFO, "\t   M(%f) = [x: %f, y: %f, z:%f] (rf)\n", t,
+        //              in[0], in[1], in[2]);
+
+        // debug_printf(DP_INFO, "\t   |S|(%f) = %f (rf)\n", t,
+        //              sqrt(in[0] * in[0] + in[1] * in[1]));
+
+        save3D(in, true);
       }
     };
 
@@ -633,6 +768,7 @@ void relaxation2(struct sim_data *data, float h, float tol, int N, int P,
 
   case SIM_ROT:
 
+    debug_printf(DP_INFO, "Performing hard relaxation...\n");
     hard_relaxation(data, N, P, xp, st, end, r2spoil);
     break;
 
@@ -640,6 +776,8 @@ void relaxation2(struct sim_data *data, float h, float tol, int N, int P,
 
     float gb_eff[3];
     void *gb_eff_p = gb_eff; // clang workaround
+
+    debug_printf(DP_INFO, "Relaxation (%f)\n", r2spoil);
 
     NESTED(void, call_fun, (float *out, float t, const float *in)) {
       float *gb_eff = gb_eff_p;
@@ -649,6 +787,13 @@ void relaxation2(struct sim_data *data, float h, float tol, int N, int P,
 
       gb_eff[0] *= data->voxel.b1;
       gb_eff[1] *= data->voxel.b1;
+
+      saveTime(t);
+      save3D(gb_eff, false);
+
+      //   debug_printf(DP_INFO, "\t gb(%f) = [x: %f, y: %f, z: %f] (relax)\n",
+      //   t, gb_eff[0],
+      //                gb_eff[1], gb_eff[2]);
 
       float r2[data->voxel.P];
 
@@ -660,10 +805,19 @@ void relaxation2(struct sim_data *data, float h, float tol, int N, int P,
         bloch_mcconnell_ode(data->voxel.P, out, in, data->voxel.r1, r2,
                             data->voxel.k, data->voxel.m0, data->voxel.Om,
                             gb_eff);
-      } else {
 
+        save3DPools(in, data->voxel.P);
+      } else {
+        // debug_printf(DP_INFO, "\t   Bloch step with R1 = %f and R2 = %f
+        // (relax)\n",
+        //              data->voxel.r1[0], data->voxel.r2[0] + r2spoil);
         bloch_ode(out, in, data->voxel.r1[0], data->voxel.r2[0] + r2spoil,
                   gb_eff);
+        // debug_printf(DP_INFO, "\t   M(%f) = [x: %f, y: %f, z:%f] (relax)\n",
+        //              t, in[0], in[1], in[2]);
+        // debug_printf(DP_INFO, "\t   |S|(%f) = %f (relax)\n", t,
+        //              sqrt(in[0] * in[0] + in[1] * in[1]));
+        save3D(in, true);
       }
     };
 
@@ -858,12 +1012,19 @@ static void run_sim(struct sim_data *data, int pools, float (*mxy)[pools][3],
       data->grad.mom = -data->grad.mom_sl * (0.5 * data->pulse.rf_end) /
                        (data->seq.te - data->pulse.rf_end);
 
+      debug_printf(
+          DP_INFO,
+          "Relaxation to TE with updated grad.mom = %f (no spoiling)\n",
+          data->grad.mom);
+
       relaxation2(data, h, tol, N, P, xp, data->pulse.rf_end, data->seq.te,
                   NULL, 0.);
 
       data->grad.mom = 0.; // [rad/s]
 
     } else {
+      debug_printf(DP_INFO,
+                   "Relaxation to TE without any changes or spoiling\n");
 
       relaxation2(data, h, tol, N, P, xp, data->pulse.rf_end, data->seq.te,
                   NULL, 0.);
@@ -877,6 +1038,7 @@ static void run_sim(struct sim_data *data, int pools, float (*mxy)[pools][3],
     if ((SEQ_FLASH == data->seq.seq_type) ||
         (SEQ_IRFLASH == data->seq.seq_type)) {
 
+      debug_printf(DP_INFO, "Adding R2 spoiling to subsequent relaxation\n");
       r2spoil = 10000.;
     }
 
@@ -890,12 +1052,18 @@ static void run_sim(struct sim_data *data, int pools, float (*mxy)[pools][3],
       data->grad.mom = -data->grad.mom_sl * (0.5 * data->pulse.rf_end) /
                        (data->seq.tr - data->seq.te);
 
+      debug_printf(
+          DP_INFO,
+          "TE -> TR balanced gradients relaxation with grad.mom = %f\n",
+          data->grad.mom);
+
       relaxation2(data, h, tol, N, P, xp, data->seq.te, data->seq.tr, NULL,
                   r2spoil);
 
       data->grad.mom = 0.;
 
     } else {
+      debug_printf(DP_INFO, "TE -> TR unbalanced gradients relaxation\n");
 
       relaxation2(data, h, tol, N, P, xp, data->seq.te, data->seq.tr, NULL,
                   r2spoil);
@@ -947,6 +1115,7 @@ void inversion(const struct sim_data *data, float h, float tol, int N, int P,
     relaxation2(&inv_data, h, tol, N, P, xp, st, end, NULL, 0.);
 
   } else {
+    debug_printf(DP_INFO, "sech inversion\n");
     // Hyperbolic Secant inversion
     inv_data.pulse.type = PULSE_HS;
 
@@ -966,6 +1135,8 @@ static void alpha_half_preparation(const struct sim_data *data, int pools,
                                    float h, float tol, int N, int P,
                                    float xp[P][N]) {
   struct sim_data prep_data = *data;
+
+  debug_printf(DP_INFO, "a/2 preparation\n");
 
   assert(0. <= data->seq.prep_pulse_length);
 
@@ -1137,6 +1308,8 @@ void bloch_simulation2(const struct sim_data *_data, int R, int pools,
 
     xp[0][2] = 1.;
 
+    refreshSave();
+
     // Initialize STM
     float xstm[M];
 
@@ -1165,13 +1338,18 @@ void bloch_simulation2(const struct sim_data *_data, int R, int pools,
     // Apply inversion
 
     if ((SEQ_IRBSSFP == data.seq.seq_type) ||
-        (SEQ_IRFLASH == data.seq.seq_type))
+        (SEQ_IRFLASH == data.seq.seq_type)) {
       inversion(&data, h, tol, N, P, xp, 0., data.seq.inversion_spoiler);
+      timeResetFlag();
+    }
 
     // Alpha/2 and TR/2 signal preparation
 
-    if ((SEQ_BSSFP == data.seq.seq_type) || (SEQ_IRBSSFP == data.seq.seq_type))
+    if ((SEQ_BSSFP == data.seq.seq_type) ||
+        (SEQ_IRBSSFP == data.seq.seq_type)) {
       alpha_half_preparation(&data, pools, h, tol, N, P, xp);
+      timeResetFlag();
+    }
 
     float mtr[M][M];
     float mte[2][M][M];
@@ -1204,6 +1382,8 @@ void bloch_simulation2(const struct sim_data *_data, int R, int pools,
     // Loop over Pulse Blocks
 
     for (int r = 0; r < data.seq.rep_num; r++) {
+
+      debug_printf(DP_INFO, "Rep #%d\n", r + 1);
 
       auto mxy = &((*Fmxy)[r][s]);
       auto sa_r1 = &((*Fsa_r1)[r][s]);
@@ -1242,6 +1422,7 @@ void bloch_simulation2(const struct sim_data *_data, int R, int pools,
 
         run_sim(&data, pools, mxy, sa_r1, sa_r2, sa_b1, sa_m0, sa_k, sa_Om, h,
                 tol, N, P, xp, xstm, mte[odd], mtr);
+        timeResetFlag();
       }
     }
   }
