@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <complex.h>
 
+#include "misc/debug.h"
 #include "misc/misc.h"
 #include "misc/mri.h"
 #include "misc/types.h"
@@ -31,7 +32,10 @@ extern inline complex float pulse_eval(const struct pulse* p, float t);
 
 static float sinc_windowed(float alpha, float t, float n)
 {
-	return ((1. - alpha) + alpha * cosf(M_PI * t / n)) * sincf(M_PI * t);
+//   debug_printf(DP_INFO, "\t\tcalc sinc(%f) = %f * ((1 - a) + a * %f) = %f\n", t,
+//                sincf(M_PI * t), cosf(M_PI * t / n),
+//                ((1. - alpha) + alpha * cosf(M_PI * t / n)) * sincf(M_PI * t));
+  return ((1. - alpha) + alpha * cosf(M_PI * t / n)) * sincf(M_PI * t);
 }
 
 /* analytical integral of windowed sinc */
@@ -53,6 +57,8 @@ static complex float pulse_sinc(const struct pulse_sinc* ps, float t)
 	float t0 = CAST_UP(ps)->duration / ps->bwtp;
 
 	assert((0 <= t) && (t <= CAST_UP(ps)->duration));
+
+	// debug_printf(DP_INFO, "\t\tps->A = %f\n", ps->A);
 
 	return ps->A * sinc_windowed(ps->alpha, (t - mid) / t0, ps->bwtp / 2.);
 }
@@ -102,6 +108,8 @@ void pulse_sinc_init(struct pulse_sinc* ps, float duration, float angle /*[deg]*
 	ps->bwtp = bwtp;
 	ps->alpha = alpha;
 	ps->A = 1.;
+
+	debug_printf(DP_INFO, "\tFA = %f\n", angle);
 
 	ps->A = DEG2RAD(angle) / pulse_sinc_integral(ps);
 }
