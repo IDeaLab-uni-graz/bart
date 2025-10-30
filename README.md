@@ -1,4 +1,4 @@
-
+> AMML Team: For data generation purposes, look at bSSFP.sh (or similar) in the root directory of the repository. Relevant changes were made to `simulation.c`
 
 BART: Toolbox for Computational Magnetic Resonance Imaging
 ==========================================================
