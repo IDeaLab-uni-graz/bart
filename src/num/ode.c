@@ -7,6 +7,7 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include "misc/debug.h"
 #include "misc/nested.h"
 
 #include "num/linalg.h"
@@ -209,6 +210,7 @@ float dormand_prince_step2(float h, int N, float ynp[N], float tn, const float y
 void ode_interval(float h, float tol, int N, float x[N], float st, float end,
 		void CLOSURE_TYPE(f)(float* out, float t, const float* yn))
 {
+	debug_printf(DP_INFO, "  Integrating ODE from %f to %f\n", st, end);
 	float k[6][N];
 	f(k[0], st, x);
 
