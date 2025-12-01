@@ -19,6 +19,7 @@ in
       fftwFloat
       pkg-config
       clang-tools
+	  jq
     ];
 
     PARALLEL = 1;
