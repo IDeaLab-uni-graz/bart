@@ -25,7 +25,7 @@ for T1 in $T1s; do
 
 				./bart sim \
 					--ODE \
-					--seq BSSFP,TR=0.0045,TE=0.00225,Nrep=30,ipl=0,ppl=0.00225,Trf=0.001,FA=45,BWTP=4,slice-thickness=$z,sl-grad=$slg \
+					--seq BSSFP,TR=0.0045,TE=0.00225,Nrep=300,ipl=0,ppl=0.00225,Trf=0.001,FA=45,BWTP=4,slice-thickness=$z,sl-grad=$slg \
 					-1 ${T1_1}:${T1_1}:1 \
 					-2 ${T2_1}:${T2_1}:1 \
 					./data/simu
